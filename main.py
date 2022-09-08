@@ -58,6 +58,8 @@ loaded_at = datetime.now()
 gameweeks = pd.DataFrame(json_data['events'])
 gameweeks['loaded_at'] = loaded_at
 
+
+# lets try using write-pandas - https://stephenallwright.com/python-connector-write-pandas-snowflake/
 engine = get_snowflake_engine()
 connection = engine.connect()
 gameweeks.to_sql('gameweek_hi', con = engine, index=False, if_exists='append')
