@@ -44,8 +44,6 @@ def call_api():
 def main_flow():
 
     api_result = call_api()
-    print(api_result)
 
-    cursor = get_snowflake_cursor()
 
 main_flow()
