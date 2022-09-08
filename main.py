@@ -1,5 +1,5 @@
 import requests
-from snowflake import connector
+import snowflake.connector
 import json
 from prefect import flow, task
 from dotenv import load_dotenv
@@ -15,26 +15,27 @@ import os
 
 #     return (SNOWFLAKE_USER,SNOWFLAKE_PASSWORD,SNOWFLAKE_ACCOUNT)
 
-@task
-def get_snowflake_cursor():
+def get_snowflake_connection():
+    print('getting snowflake cursor...')
 
     # load creds - this probably isnt the right way to do this...
     # TODO: research proper way to source env vars
     load_dotenv('.env') 
 
-    ctx = connector.connect(
-    account = os.environ.get('SNOWFLAKE_ACCOUNT'), 
+    ctx = snowflake.connector.connect(
+    account = os.environ.get('SNOWFLAKE_ACCOUNT'),
     user = os.environ.get('SNOWFLAKE_USER'),
     password = os.environ.get('SNOWFLAKE_PASSWORD'),
     database='FANTASY_PL_ETL',
     schema='RAW'
     )
-    return ctx.cursor()
+    return ctx
 
 
 
 @task
 def call_api():
+    print('querying fantasy pl api...')
     url = "https://fantasy.premierleague.com/api/bootstrap-static/"
     data = requests.get(url).json()
     return data
@@ -42,11 +43,9 @@ def call_api():
 @flow
 def main_flow():
 
-    print('querying fantasy pl api...')
     api_result = call_api()
     print(api_result)
 
-    print('getting snowflake cursor...')
     cursor = get_snowflake_cursor()
 
 main_flow()
