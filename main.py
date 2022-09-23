@@ -43,11 +43,18 @@ def get_snowflake_engine():
 
 
 # @task
-def call_api():
+def extract():
     print('querying fantasy pl api...')
     url = "https://fantasy.premierleague.com/api/bootstrap-static/"
     data = requests.get(url).json()
     return data
+
+def transform(json_obj_name: str):
+    loaded_at = int(time.time())
+
+    gameweeks = pd.DataFrame(json_data[json_obj_name])
+    gameweeks['loaded_at']
+
 
 @flow
 def main_flow():
@@ -62,7 +69,7 @@ def prep_data(data):
     gameweeks = pd.DataFrame(json_data['events'])
     gameweeks['loaded_at']
 
-    
+
 
 
 # LOAD DATA FROM API
