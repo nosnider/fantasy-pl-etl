@@ -1,100 +1,74 @@
-from datetime import datetime
 import requests
-import snowflake.connector
 from snowflake.sqlalchemy import URL
 from snowflake.connector.pandas_tools import pd_writer
 from sqlalchemy import create_engine
-import numpy as np
-import json
-from prefect import flow, task
-from dotenv import load_dotenv
 import os
 import time
 import pandas as pd
 
-# @task
-# def get_creds():
-#     load_dotenv('.env') 
-
-#     SNOWFLAKE_USER = os.environ.get('SNOWFLAKE_USER')
-#     SNOWFLAKE_PASSWORD = os.environ.get('SNOWFLAKE_PASSWORD')
-#     SNOWFLAKE_ACCOUNT = os.environ.get('SNOWFLAKE_ACCOUNT')
-
-#     return (SNOWFLAKE_USER,SNOWFLAKE_PASSWORD,SNOWFLAKE_ACCOUNT)
 
 def get_snowflake_engine():
     print('getting snowflake engine...')
 
-    # load creds - this probably isnt the right way to do this...
+    # load creds - this probably isn't the right way to do this...
     # TODO: research proper way to source env vars
-    load_dotenv('.env') 
 
     engine = create_engine(
         URL(
-        account = os.environ.get('SNOWFLAKE_ACCOUNT'),
-        user = os.environ.get('SNOWFLAKE_USER'),
-        password = os.environ.get('SNOWFLAKE_PASSWORD'),
-        database='FANTASY_PL_ETL',
-        schema='RAW'
+            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
+            user=os.environ.get('SNOWFLAKE_USER'),
+            password=os.environ.get('SNOWFLAKE_PASSWORD'),
+            database='FANTASY_PL_ETL',
+            schema='RAW'
         )
     )
     return engine
 
 
-
 # @task
 def extract():
+    # returns: data -> json respnose with the following keys:
+    # 'events' - 1 row per gameweek
+    # 'teams' - 1 row per team
+    # 'elements' - players
+    # 'element_types' - player type
     print('querying fantasy pl api...')
     url = "https://fantasy.premierleague.com/api/bootstrap-static/"
-    data = requests.get(url).json()
+    response = requests.get(url)
+    print(f'response status code: {response.status_code}')
+    data = response.json()
+    data['loaded_at'] = time.time()
+
     return data
 
-def transform(json_obj_name: str):
-    loaded_at = int(time.time())
 
-    gameweeks = pd.DataFrame(json_data[json_obj_name])
-    gameweeks['loaded_at']
+def transform(data: dict, json_table_name: str):
+    # transform(data): function that receives data from prem league api and generates pandas dataframes
+    # input:   data -> json data from prem league api
+    # returns: df -> dataframe with current time, columns enriched
+
+    df = pd.DataFrame(data[json_table_name])
+    df['loaded_at'] = data['loaded_at']
+    # https://stackoverflow.com/questions/69772464/snowflake-connector-sql-compilation-error-invalid-identifier-from-pandas-datafra
+    df.columns = map(lambda x: str(x).upper(), df.columns)
+
+    return df, json_table_name
 
 
-@flow
-def main_flow():
-    api_result = call_api()
+def load(df, engine, table_name: str):
+    with engine.connect() as con:
+        status = df.to_sql(
+            name=table_name.lower()
+            , con=engine
+            , if_exists='replace'
+            , method=pd_writer
+            , index=False)
+
+
+if __name__ == "__main__":
+    data = extract()
     engine = get_snowflake_engine()
-    print(engine)
 
-
-def prep_data(data):
-    loaded_at = int(time.time())
-
-    gameweeks = pd.DataFrame(json_data['events'])
-    gameweeks['loaded_at']
-
-
-
-
-# LOAD DATA FROM API
-json_data = call_api()
-loaded_at = int(time.time()) 
-gameweeks = pd.DataFrame(json_data['events'])
-gameweeks['loaded_at'] = loaded_at
-# https://stackoverflow.com/questions/69772464/snowflake-connector-sql-compilation-error-invalid-identifier-from-pandas-datafra
-gameweeks.columns = map(lambda x: str(x).upper(), gameweeks.columns)
-
-# define variables we will pass into sql write function
-table_name = 'testing1'
-if_exists = 'append'
-
-# get snowflake engine
-engine = get_snowflake_engine()
-
-#connect and write data
-with engine.connect() as con:
-    gameweeks.to_sql(
-        name=table_name.lower()
-        , con=engine
-        , if_exists=if_exists
-        , method=pd_writer
-        , index=False)
-
-if __name__ == "main":
-    main_flow()
+    for table in ['events', 'teams', 'elements', 'element_types']:
+        data_transformed = transform(data, table)
+        load(df=data_transformed[0], engine=engine, table_name=data_transformed[1])
