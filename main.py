@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 import os
 import time
 import pandas as pd
+from prefect import flow,task
 
 
 def get_snowflake_engine():
@@ -18,14 +19,14 @@ def get_snowflake_engine():
             account=os.environ.get('SNOWFLAKE_ACCOUNT'),
             user=os.environ.get('SNOWFLAKE_USER'),
             password=os.environ.get('SNOWFLAKE_PASSWORD'),
-            database='FANTASY_PL_ETL',
-            schema='RAW'
+            database='FANTASY_PL',
+            schema='PUBLIC'
         )
     )
     return engine
 
 
-# @task
+@task
 def extract():
     # returns: data -> json respnose with the following keys:
     # 'events' - 1 row per gameweek
@@ -41,7 +42,7 @@ def extract():
 
     return data
 
-
+@task
 def transform(data: dict, json_table_name: str):
     # transform(data): function that receives data from prem league api and generates pandas dataframes
     # input:   data -> json data from prem league api
@@ -54,21 +55,25 @@ def transform(data: dict, json_table_name: str):
 
     return df, json_table_name
 
-
+@task
 def load(df, engine, table_name: str):
     with engine.connect() as con:
         status = df.to_sql(
             name=table_name.lower()
             , con=engine
-            , if_exists='replace'
+            , if_exists='append'
             , method=pd_writer
             , index=False)
 
-
-if __name__ == "__main__":
+@flow
+def main():
     data = extract()
     engine = get_snowflake_engine()
 
     for table in ['events', 'teams', 'elements', 'element_types']:
         data_transformed = transform(data, table)
         load(df=data_transformed[0], engine=engine, table_name=data_transformed[1])
+
+if __name__ == "__main__":
+    main()
+

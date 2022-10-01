@@ -1,0 +1,1 @@
+select * from {{ source('public','player_types') }}
