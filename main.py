@@ -19,8 +19,8 @@ def get_snowflake_engine():
             account=os.environ.get('SNOWFLAKE_ACCOUNT'),
             user=os.environ.get('SNOWFLAKE_USER'),
             password=os.environ.get('SNOWFLAKE_PASSWORD'),
-            database='FANTASY_PL_ETL',
-            schema='RAW'
+            database='FANTASY_PL',
+            schema='PUBLIC'
         )
     )
     return engine
@@ -61,7 +61,7 @@ def load(df, engine, table_name: str):
         status = df.to_sql(
             name=table_name.lower()
             , con=engine
-            , if_exists='replace'
+            , if_exists='append'
             , method=pd_writer
             , index=False)
 

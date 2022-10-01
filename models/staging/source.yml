@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: public
+    tables:
+      - name: players
+        identifier: elements
+      - name: player_types
+        identifier: element_types
+      - name: gameweeks
+        identifier: events
+      - name: teams
